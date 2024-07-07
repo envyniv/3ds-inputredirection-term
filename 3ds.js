@@ -1,101 +1,185 @@
-const dgram = require('dgram');
-const xinput = require('./xinput');
-const socket = dgram.createSocket('udp4');
-const config = require('./config/config');
-const buttons = require('./config/button_map');
+const args = process.argv.slice(2);
 
+const IP_RE = new RegExp('(?:[0-9]{1,3}\.){3}[0-9]{1,3}');
+const INTERVAL_RE = new RegExp('-i([0-9]+)');
+const PORT = "4950";
+try {
+    var IPs = args.filter((e)=> IP_RE.test(e));
+} catch (e) {
+    console.log(e);
+}
+if (!IPs.length) var IPs = ["127.0.0.1"];;
+
+try {
+    var INTERVAL = parseInt(args.filter((e, i)=> INTERVAL_RE.test(e))[0].split("i").pop());
+} catch (e) {
+    var INTERVAL = 5;
+}
+console.log("Will propagate w/ interval "+INTERVAL+" to the following:");
+for (var i = 0; i < IPs.length; i++) {
+    console.log("\t-\t"+IPs[i]);
+}
+
+const dgram = require('dgram');
+const socket = dgram.createSocket('udp4');
+//const buttons = require('./button_map');
+var keypress = null;
+var readline = null;
+try {
+    keypress = require('keypress');
+    tty = require('tty');
+    keypress(process.stdin);
+    keypress.enableMouse(process.stdout)
+} catch (e) {
+    readline = require('readline');
+    readline.emitKeypressEvents(process.stdin);
+}
 const M_SQRT1_2 = 1/Math.sqrt(2);
 
-const CPAD_BOUND = 0x5d0;
-const CPP_BOUND = 0x7f;
 
-const gamePadConfig = { interval: config.interval };
-const gamepad = xinput.WrapController(0, gamePadConfig);
 
-startInputRedirection();
+//const CPAD_BOUND = 0x5d0;
+//const CPP_BOUND = 0x7f;
 
-function startInputRedirection() {
-    setInterval(() => {
-        let state = xinput.GetState(0);
+//const gamePadConfig = { interval: config.interval };
+//const gamepad = xinput.WrapController(0, gamePadConfig);
 
-        const hidPad = setButtons(state);
-        const touchScreenState = setTouchscreen(state);
-        const circlePadState = setCirclePad();
-        const newDSInputs = setNewDSInputs(state);
-        const interfaceButtons = 0;
 
-        const buffer = Buffer.allocUnsafe(20);
 
-        buffer.writeUInt32LE(hidPad, 0);
-        buffer.writeUInt32LE(touchScreenState, 4);
-        buffer.writeUInt32LE(circlePadState, 8);
-        buffer.writeUInt32LE(newDSInputs, 12);
-        buffer.writeUInt32LE(interfaceButtons, 16);
+const Input = {
+    up: false,
+    down: false,
+    right: false,
+    left: false,
+    
+    a: false, //a
+    d: false, //b
+    z: false, //y
+    x: false, //x
+    
+    space: false, //start
+    b: false, //select
 
-        socket.send(buffer, config.port, config.ipAddress, err => {
+    t: false, //r1
+    g: false, //r2
+    
+    h: false, //l1
+    n: false, //l2
+    
+    click: undefined
+};
+
+process.on('exit', function () {
+    //disable mouse on exit, so that the state is back to normal
+    //for the terminal.
+    if (keypress) keypress.disableMouse(process.stdout);
+})
+
+process.stdin.on('mousepress', function (mouse) {
+    console.log(mouse);
+})
+
+process.stdin.on('keypress', function (ch, key) {
+    
+    if (key && key.ctrl && key.name == "c") process.exit();
+    var propagate = 0xfff; //placeholder - work out something better
+    propagate &= ~(1 << 6);
+    for (var keyname in Input) {
+        if (key.name == keyname) {
+            Input[keyname] = Boolean(key);
+            console.log(key);
+        }
+    }
+});
+
+setInterval(() => {Propagate()}, 1000/INTERVAL);
+
+process.stdin.setRawMode(true);
+process.stdin.resume();
+
+function Propagate() {
+    //console.log("propagating");
+    const buffer = Buffer.allocUnsafe(20);
+    buffer.writeUInt32LE(setButtons(), 0);
+    /*
+    buffer.writeUInt32LE(touchScreenState, 4);
+    buffer.writeUInt32LE(circlePadState, 8);
+    buffer.writeUInt32LE(newDSInputs, 12);
+    buffer.writeUInt32LE(interfaceButtons, 16);
+    */
+    buffer.writeUInt32LE(0x2000000, 4);
+    buffer.writeUInt32LE(0x7ff7ff, 8);
+    buffer.writeUInt32LE(0, 12);
+    buffer.writeUInt32LE(0, 16);
+
+    for (var i = 0; i < IPs.length; i++) {
+        socket.send(buffer, PORT, IPs[i], err => {
             if (err) {
                 console.log(err);
             }
         });
-    }, 5);
+    }
 }
 
 /**
  * Map the appropriate XBox controller buttons
  * to 3DS controls
  *
- * @param state
  * @returns {number}
  */
-function setButtons(state) {
+function setButtons() {
     let hidPad = 0xfff;
 
-    if (state.buttons.a) {
-        hidPad &= ~(1 << buttons.A);
+    if (Input.a === true) {
+        hidPad &= ~(1 << 0);
     }
 
-    if (state.buttons.b) {
-        hidPad &= ~(1 << buttons.B);
+    if (Input.d === true) {
+        hidPad &= ~(1 << 1);
     }
 
-    if (state.control.back) {
-        hidPad &= ~(1 << (buttons.SELECT));
+    if (Input.space) {
+        hidPad &= ~(1 << (2));
     }
 
-    if (state.control.start) {
-        hidPad &= ~(1 << (buttons.START));
+    if (Input.b) {
+        hidPad &= ~(1 << (3));
     }
 
-    if (state.dpad.right) {
-        hidPad &= ~(1 << (buttons.RIGHT));
+    if (Input.right === true) {
+        hidPad &= ~(1 << (4));
     }
 
-    if (state.dpad.left) {
-        hidPad &= ~(1 << (buttons.LEFT));
+    if (Input.left === true) {
+        hidPad &= ~(1 << (5));
     }
 
-    if (state.dpad.up) {
-        hidPad &= ~(1 << (buttons.UP));
+    if (Input.up === true) {
+        hidPad &= ~(1 << (6));
     }
 
-    if (state.dpad.down) {
-        hidPad &= ~(1 << (buttons.DOWN));
+    if (Input.down === true) {
+        hidPad &= ~(1 << (7));
     }
 
-    if (state.trigger.right) {
-        hidPad &= ~(1 << (buttons.R1));
+    if (Input.h) {
+        hidPad &= ~(1 << (8));
     }
 
-    if (state.trigger.left) {
-        hidPad &= ~(1 << (buttons.L1));
+    if (Input.t) {
+        hidPad &= ~(1 << (9));
     }
 
-    if (state.buttons.x) {
-        hidPad &= ~(1 << (buttons.X))
+    if (Input.x === true) {
+        hidPad &= ~(1 << (10))
     }
 
-    if (state.buttons.y) {
-        hidPad &= ~(1 << (buttons.Y))
+    if (Input.z === true) {
+        hidPad &= ~(1 << (11))
+    }
+
+    for (var keyname in Input) {
+        Input[keyname] = false;
     }
 
     return hidPad;
@@ -162,7 +246,7 @@ function setCirclePad() {
  * @param state
  * @returns {number}
  */
-function setNewDSInputs(state) {
+function setInputs_New(state) {
     let cStickState = 0x80800081;
 
     const rx = gamepad.getNormalizedState('rightstick', 'x');
