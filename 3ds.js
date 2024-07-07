@@ -53,7 +53,7 @@ const Input = {
     left: false,
     
     a: false, //a
-    d: false, //b
+    s: false, //b
     z: false, //y
     x: false, //x
     
@@ -65,9 +65,11 @@ const Input = {
     
     h: false, //l1
     n: false, //l2
-    
-    click: undefined
 };
+
+const Interface = {
+    tab: false // home
+}
 
 process.on('exit', function () {
     //disable mouse on exit, so that the state is back to normal
@@ -90,12 +92,32 @@ process.stdin.on('keypress', function (ch, key) {
             console.log(key);
         }
     }
+    for (var keyname in Interface) {
+        if (key.name == keyname) {
+            Interface[keyname] = Boolean(key);
+            console.log(key);
+        }
+    }
 });
 
 setInterval(() => {Propagate()}, 1000/INTERVAL);
 
 process.stdin.setRawMode(true);
 process.stdin.resume();
+
+function interfaceButtons() {
+    let intf = 0x0;
+
+    if (Interface.tab) {
+        intf |= 1;
+    }
+
+    for (var keyname in Interface) {
+        Interface[keyname] = false;
+    }
+
+    return intf;
+}
 
 function Propagate() {
     //console.log("propagating");
@@ -110,7 +132,8 @@ function Propagate() {
     buffer.writeUInt32LE(0x2000000, 4);
     buffer.writeUInt32LE(0x7ff7ff, 8);
     buffer.writeUInt32LE(0, 12);
-    buffer.writeUInt32LE(0, 16);
+    //buffer.writeUInt32LE(0, 16);
+    buffer.writeUInt32LE(interfaceButtons(), 16);
 
     for (var i = 0; i < IPs.length; i++) {
         socket.send(buffer, PORT, IPs[i], err => {
