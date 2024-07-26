@@ -1,8 +1,5 @@
-* Purposefully minimal terminal-only client for Rosalina InputRedirection
-This is a Minimal Node.js implementation for input redirection with
-minimal build steps. Based heavily on [[https://github.com/TuxSH/InputRedirectionClient-Qt][InputRedirection-Qt]]
-this node process captures a terminal's input, and sends it to the UDP
-port on the 3DS (4950) as binary controller data.
+* Minimal terminal client for InputRedirection
+This is a Minimal Node.js implementation for input redirection. Based heavily on [[https://github.com/TuxSH/InputRedirectionClient-Qt][InputRedirection-Qt]] this node process captures a terminal's input, and sends it to the UDP port on the 3DS (4950) as binary controller data.
 
 ** Usage
 This is supposed to be used as a cli utility. Simply invoking it with a
@@ -15,13 +12,16 @@ $ node 3ds.js -i5 192.168.1.7 192.168.1.8 192.168.1.9 192.168.1.10
 - The refresh time number must be rigorously attached to the =-i= flag,
   or it will not get picked up.
 
-This can be used to partially automate gameplay on 3ds console through external utilities like ~ydotool~
+This can be used to partially automate gameplay on 3ds console currently through external utilities like ~ydotool~
+
+An accessory bash script is provided that automatically scans the network and populates execution parameters. It can also execute a provided bash script present in the ~automation~ subfolder as a secondary unpriviledged user.
 
 ** Todos
 *** TODO figure out keyrelease
 *** TODO Touchscreen
 *** TODO Circlepad?
+possibly use TFGH
 *** TODO C-stick?
-*** TODO Home
+*** DONE Home
 *** TODO Power?
 Being able to remotely turn off your console seems really, really dumb
